@@ -1,0 +1,27 @@
+{
+    "schema": "1.0",
+    "type": "whmcs-gateways",
+    "name": "paymento",
+    "license": "mit",
+    "category": "payments",
+    "description": {
+      "name": "Paymento",
+      "tagline": "Accept cryptocurrencies via non-custodial crypto payment gateway",
+      "long": "With Paymento, your customer can directly pay to your own wallet while your software automatically handle all transactions."
+    },
+    "logo": {
+      "filename": "paymento-logo.png"
+    },
+    "support": {
+      "homepage": "https:\/\/paymento.io\/",
+      "support_url": "https://github.com/paymento/paymento-whmcs-plugin\/issues",
+      "docs_url": "https:\/\/github.com\/paymento\/paymento-whmcs-plugin"
+    },
+    "authors": [
+      {
+        "name": "Paymento Team",
+        "homepage": "https:\/\/paymento.io\/"
+      }
+    ]
+  }
+  
