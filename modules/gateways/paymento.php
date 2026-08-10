@@ -49,10 +49,15 @@ function paymento_link($params)
     $systemUrl = $params['systemurl'];
     $langPayNow = $params['langpaynow'];
 
+    $returnUrl = paymento_callback_url();
+    if ($returnUrl === '') {
+        $returnUrl = rtrim($systemUrl, '/') . '/modules/gateways/callback/paymento.php';
+    }
+
     $postfields = array(
         'fiatAmount' => $amount,
         'fiatCurrency' => $currencyCode,
-        'returnUrl' => $systemUrl . 'modules/gateways/callback/paymento.php',
+        'returnUrl' => $returnUrl,
         'orderId' => $invoiceId,
         'speed' => 0,
     );
@@ -82,6 +87,10 @@ function paymento_api_call($method, $endpoint, $data, $params)
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $apiUrl);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
     curl_setopt($ch, CURLOPT_HTTPHEADER, array(
         "Api-Key: " . $apiKey,
         "Content-Type: application/json",
@@ -113,13 +122,51 @@ function paymento_api_call($method, $endpoint, $data, $params)
     }
 }
 
+/**
+ * Absolute URL of this module's callback file, derived from the configured
+ * SystemURL. Never from $_SERVER['HTTP_HOST'] - that is attacker-controlled,
+ * and it also assumes https:// at the document root, which breaks every
+ * WHMCS install that lives in a subdirectory.
+ */
+function paymento_callback_url()
+{
+    $systemUrl = '';
+
+    try {
+        $systemUrl = (string) \WHMCS\Config\Setting::getValue('SystemURL');
+    } catch (Throwable $e) {
+        $systemUrl = '';
+    }
+
+    if ($systemUrl === '') {
+        global $whmcs;
+        if (isset($whmcs) && is_object($whmcs) && method_exists($whmcs, 'get_config')) {
+            $systemUrl = (string) $whmcs->get_config('SystemURL');
+        }
+    }
+
+    if ($systemUrl === '') {
+        return '';
+    }
+
+    return rtrim($systemUrl, '/') . '/modules/gateways/callback/paymento.php';
+}
+
 function paymento_set_callback_url($apiKey)
 {
-    $callbackUrl = 'https://' . $_SERVER['HTTP_HOST'] . '/modules/gateways/callback/paymento.php';
-    
+    $callbackUrl = paymento_callback_url();
+
+    if ($callbackUrl === '') {
+        return array('success' => false, 'message' => 'Could not determine SystemURL. Set it under Setup > General Settings before saving.');
+    }
+
     $ch = curl_init('https://api.paymento.io/v1/payment/settings');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
         'IPN_Url' => $callbackUrl,
         'IPN_Method' => 1 // HTTP POST
@@ -129,7 +176,7 @@ function paymento_set_callback_url($apiKey)
         'Content-Type: application/json',
         'Accept: text/plain'
     ]);
-    
+
     $response = curl_exec($ch);
     $error = curl_error($ch);
     curl_close($ch);
@@ -149,17 +196,24 @@ function paymento_set_callback_url($apiKey)
 
 function paymento_config_validate($params)
 {
-    $apiKey = $params['apiKey'];
-    $secretKey = $params['secretKey'];
-    
-    if ($apiKey && $secretKey) {
-        $result = paymento_set_callback_url($apiKey);
-        if (!$result['success']) {
-            return array(
-                'error' => 'Failed to set callback URL: ' . $result['message']
-            );
-        }
+    $apiKey = trim($params['apiKey']);
+    $secretKey = trim($params['secretKey']);
+
+    // Both are mandatory. The IPN handler refuses to process anything without
+    // a secret key, so saving the gateway with one missing would leave a
+    // configuration that silently accepts no payments at all.
+    if ($apiKey === '' || $secretKey === '') {
+        return array(
+            'error' => 'Both the API Key and the Secret Key are required. The Secret Key is what authenticates payment notifications from Paymento.'
+        );
     }
-    
+
+    $result = paymento_set_callback_url($apiKey);
+    if (!$result['success']) {
+        return array(
+            'error' => 'Failed to set callback URL: ' . $result['message']
+        );
+    }
+
     return array();
 }
