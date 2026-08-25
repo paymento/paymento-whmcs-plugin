@@ -25,9 +25,13 @@ require_once __DIR__ . '/../../../includes/invoicefunctions.php';
 
 use WHMCS\Database\Capsule;
 
-const PAYMENTO_API_BASE = 'https://api.paymento.io/v1/';
-const PAYMENTO_HTTP_TIMEOUT = 20;
-const PAYMENTO_CONNECT_TIMEOUT = 10;
+// Guarded: $gateway->load() below includes modules/gateways/paymento.php,
+// which declares the same three constants.
+if (!defined('PAYMENTO_API_BASE')) {
+    define('PAYMENTO_API_BASE', 'https://api.paymento.io/v1/');
+    define('PAYMENTO_HTTP_TIMEOUT', 20);
+    define('PAYMENTO_CONNECT_TIMEOUT', 10);
+}
 
 // Paymento OrderStatus enum (Paymento.DomainClasses/Enums/GeneralProperties.cs).
 const PAYMENTO_STATUS_PARTIAL_PAID = 2;
